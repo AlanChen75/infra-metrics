@@ -1,0 +1,11 @@
+timestamp,provider,category,busy,healthy,today_used,daily_limit,remaining
+2026-03-09T13:45:17,google_tts,tts,false,true,0,999999,999999
+2026-03-09T13:45:17,gemini_image,image,false,true,8,999999,999991
+2026-03-09T13:45:17,gemini_video,video,false,true,3,3,0
+2026-03-09T13:45:17,gemini_chat,llm,false,true,3,999999,999996
+2026-03-09T13:45:17,gemini_audio,audio,false,true,0,999999,999999
+2026-03-09T13:45:17,notebooklm,podcast,false,true,0,20,20
+2026-03-09T13:45:17,notebooklm_video,video,false,true,0,20,20
+2026-03-09T13:45:17,groq_llm,llm,false,true,7,14400,14393
+2026-03-09T13:45:17,groq_stt,stt,false,true,0,14400,14400
+2026-03-09T13:45:17,web_fetcher,web,false,true,0,999999,999999
