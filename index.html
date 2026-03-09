@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infrastructure Metrics Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+  :root {
+    --bg-primary: #0f1117;
+    --bg-card: #1a1d27;
+    --bg-card-hover: #1e2230;
+    --border: #2a2d3a;
+    --text-primary: #e4e6ed;
+    --text-secondary: #8b8fa3;
+    --text-muted: #5c6070;
+    --accent: #6c8cff;
+    --accent-dim: #4a6ae0;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --error: #f87171;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  .header {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header-inner {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .header h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+  }
+
+  .header h1 span {
+    color: var(--accent);
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.15s;
+  }
+
+  .btn:hover {
+    background: var(--border);
+    border-color: var(--text-muted);
+  }
+
+  .btn-icon {
+    padding: 6px 10px;
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  input[type="date"] {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    outline: none;
+  }
+
+  input[type="date"]:focus {
+    border-color: var(--accent);
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.7);
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 4px;
+  }
+
+  .status-dot.ok { background: var(--success); }
+  .status-dot.warn { background: var(--warning); }
+  .status-dot.err { background: var(--error); }
+
+  .main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px 24px 40px;
+  }
+
+  .node-status-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .node-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 0.8rem;
+    min-width: 140px;
+  }
+
+  .node-badge .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .node-badge .name {
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .node-badge .info {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin-left: auto;
+  }
+
+  .section-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 28px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    transition: border-color 0.2s;
+  }
+
+  .card:hover {
+    border-color: var(--text-muted);
+  }
+
+  .card-title {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .card-title .unit {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .chart-container {
+    position: relative;
+    height: 240px;
+  }
+
+  .card-full {
+    grid-column: 1 / -1;
+  }
+
+  .message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+  }
+
+  .loading-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 8px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .ai-hub-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .provider-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .provider-card .pname {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+  }
+
+  .provider-card .pbar-wrap {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+
+  .provider-card .pbar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+
+  .provider-card .pstats {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .provider-healthy { color: var(--success); }
+  .provider-unhealthy { color: var(--error); }
+
+  @media (max-width: 768px) {
+    .header-inner { flex-direction: column; align-items: flex-start; }
+    .chart-grid { grid-template-columns: 1fr; }
+    .main { padding: 12px; }
+    .chart-container { height: 200px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <h1><span>&#9632;</span> Infrastructure Metrics Dashboard</h1>
+    <div class="controls">
+      <button class="btn btn-icon" onclick="changeDate(-1)" title="Previous day">&larr;</button>
+      <input type="date" id="datePicker" onchange="loadAll()">
+      <button class="btn btn-icon" onclick="changeDate(1)" title="Next day">&rarr;</button>
+      <button class="btn" onclick="setToday()">Today</button>
+      <button class="btn" onclick="loadAll()">&#8635; Refresh</button>
+    </div>
+    <div class="status-bar">
+      <span id="statusText"><span class="loading-spinner" style="display:inline-block;vertical-align:middle;"></span> Loading...</span>
+      <span id="lastUpdated"></span>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="node-status-row" id="nodeStatusRow"></div>
+
+  <div class="section-title">Node Metrics</div>
+  <div class="chart-grid">
+    <div class="card">
+      <div class="card-title">CPU Usage <span class="unit">%</span></div>
+      <div class="chart-container"><canvas id="chartCpu"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Memory Usage <span class="unit">MB</span></div>
+      <div class="chart-container"><canvas id="chartMem"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Temperature <span class="unit">&deg;C</span></div>
+      <div class="chart-container"><canvas id="chartTemp"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Disk Usage <span class="unit">%</span></div>
+      <div class="chart-container"><canvas id="chartDisk"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section-title">GPU &mdash; ac-3090</div>
+  <div class="chart-grid">
+    <div class="card">
+      <div class="card-title">GPU Temperature <span class="unit">&deg;C</span></div>
+      <div class="chart-container"><canvas id="chartGpuTemp"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">GPU Utilization <span class="unit">%</span></div>
+      <div class="chart-container"><canvas id="chartGpuUtil"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">GPU Memory <span class="unit">MB</span></div>
+      <div class="chart-container"><canvas id="chartGpuMem"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section-title">AI Hub Services</div>
+  <div class="ai-hub-grid" id="aiHubCards"></div>
+  <div class="chart-grid">
+    <div class="card card-full">
+      <div class="card-title">Usage Over Time <span class="unit">requests</span></div>
+      <div class="chart-container" style="height:280px"><canvas id="chartAiHub"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const NODES = ['ac-3090', 'ac-mac', 'ac-rpi5', 'acmacmini2', 'ac-2012'];
+const NODE_COLORS = {
+  'ac-3090':    { line: '#6c8cff', bg: 'rgba(108,140,255,0.1)' },
+  'ac-mac':     { line: '#4ade80', bg: 'rgba(74,222,128,0.1)' },
+  'ac-rpi5':    { line: '#fbbf24', bg: 'rgba(251,191,36,0.1)' },
+  'acmacmini2': { line: '#f472b6', bg: 'rgba(244,114,182,0.1)' },
+  'ac-2012':    { line: '#a78bfa', bg: 'rgba(167,139,250,0.1)' },
+};
+
+const PROVIDER_COLORS = {
+  'gemini_image':  '#6c8cff',
+  'gemini_chat':   '#818cf8',
+  'gemini_video':  '#a78bfa',
+  'gemini_audio':  '#c084fc',
+  'google_tts':    '#4ade80',
+  'groq_llm':      '#fbbf24',
+  'whisper_stt':   '#fb923c',
+  'web_fetcher':   '#f472b6',
+  'notebooklm':    '#22d3ee',
+  'notebooklm_video': '#2dd4bf',
+};
+
+const charts = {};
+let nodeData = {};
+let aiHubData = [];
+let refreshTimer = null;
+
+function getDateStr() {
+  return document.getElementById('datePicker').value;
+}
+
+function setToday() {
+  const d = new Date();
+  const str = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  document.getElementById('datePicker').value = str;
+  loadAll();
+}
+
+function changeDate(delta) {
+  const picker = document.getElementById('datePicker');
+  const d = new Date(picker.value + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  const str = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  picker.value = str;
+  loadAll();
+}
+
+function basePath() {
+  const loc = window.location;
+  if (loc.protocol === 'file:') {
+    return './data';
+  }
+  const path = loc.pathname;
+  const dir = path.substring(0, path.lastIndexOf('/'));
+  return dir + '/data';
+}
+
+async function fetchCSV(url) {
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const text = await resp.text();
+    if (!text.trim()) return null;
+    const lines = text.trim().split('\n');
+    if (lines.length < 2) return null;
+    const headers = lines[0].split(',');
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const vals = lines[i].split(',');
+      if (vals.length < headers.length) continue;
+      const row = {};
+      headers.forEach((h, idx) => { row[h.trim()] = vals[idx].trim(); });
+      rows.push(row);
+    }
+    return rows;
+  } catch(e) {
+    return null;
+  }
+}
+
+async function loadAll() {
+  const dateStr = getDateStr();
+  if (!dateStr) return;
+
+  const statusEl = document.getElementById('statusText');
+  statusEl.innerHTML = '<span class="loading-spinner" style="display:inline-block;vertical-align:middle;"></span> Loading...';
+
+  const base = basePath();
+  nodeData = {};
+  let loadedCount = 0;
+  let totalNodes = NODES.length;
+
+  const promises = NODES.map(async (node) => {
+    const url = base + '/' + node + '/' + dateStr + '.csv';
+    const data = await fetchCSV(url);
+    nodeData[node] = data;
+    if (data) loadedCount++;
+  });
+
+  const aiUrl = base + '/ai-hub/' + dateStr + '.csv';
+  const aiPromise = fetchCSV(aiUrl).then(data => { aiHubData = data || []; });
+
+  await Promise.all([...promises, aiPromise]);
+
+  renderNodeStatus();
+  renderNodeCharts();
+  renderGpuCharts();
+  renderAiHub();
+
+  const now = new Date();
+  const ts = now.toLocaleTimeString();
+  document.getElementById('lastUpdated').textContent = 'Updated: ' + ts;
+
+  if (loadedCount === 0 && aiHubData.length === 0) {
+    statusEl.innerHTML = '<span class="status-dot err"></span> No data for ' + dateStr;
+  } else {
+    statusEl.innerHTML = '<span class="status-dot ok"></span> ' + loadedCount + '/' + totalNodes + ' nodes loaded';
+  }
+
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(loadAll, 5 * 60 * 1000);
+}
+
+function renderNodeStatus() {
+  const container = document.getElementById('nodeStatusRow');
+  container.innerHTML = '';
+  NODES.forEach(node => {
+    const data = nodeData[node];
+    const badge = document.createElement('div');
+    badge.className = 'node-badge';
+    const color = NODE_COLORS[node].line;
+    if (data && data.length > 0) {
+      const last = data[data.length - 1];
+      const cpu = parseFloat(last.cpu_percent) || 0;
+      const mem = parseFloat(last.mem_used_mb) || 0;
+      const total = parseFloat(last.mem_total_mb) || 1;
+      const memPct = Math.round(mem / total * 100);
+      badge.innerHTML = '<div class="dot" style="background:' + color + '"></div>' +
+        '<span class="name">' + node + '</span>' +
+        '<span class="info">CPU ' + cpu + '% | Mem ' + memPct + '%</span>';
+    } else {
+      badge.innerHTML = '<div class="dot" style="background:var(--text-muted)"></div>' +
+        '<span class="name">' + node + '</span>' +
+        '<span class="info">No data</span>';
+    }
+    container.appendChild(badge);
+  });
+}
+
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: { duration: 300 },
+  interaction: { mode: 'index', intersect: false },
+  plugins: {
+    legend: {
+      position: 'bottom',
+      labels: {
+        color: '#8b8fa3',
+        boxWidth: 12,
+        boxHeight: 2,
+        padding: 12,
+        font: { size: 11 }
+      }
+    },
+    tooltip: {
+      backgroundColor: '#1a1d27',
+      titleColor: '#e4e6ed',
+      bodyColor: '#8b8fa3',
+      borderColor: '#2a2d3a',
+      borderWidth: 1,
+      cornerRadius: 6,
+      padding: 10,
+    }
+  },
+  scales: {
+    x: {
+      type: 'time',
+      time: { unit: 'hour', displayFormats: { hour: 'HH:mm' }, tooltipFormat: 'HH:mm:ss' },
+      grid: { color: 'rgba(42,45,58,0.5)', drawBorder: false },
+      ticks: { color: '#5c6070', font: { size: 10 }, maxTicksLimit: 12 },
+    },
+    y: {
+      grid: { color: 'rgba(42,45,58,0.5)', drawBorder: false },
+      ticks: { color: '#5c6070', font: { size: 10 } },
+      beginAtZero: true,
+    }
+  }
+};
+
+function makeDatasets(field, nodes) {
+  return nodes.map(node => {
+    const data = nodeData[node];
+    if (!data) return null;
+    const points = data.map(r => {
+      const val = parseFloat(r[field]);
+      if (isNaN(val) || val === 0 && field === 'temp_c') return null;
+      return { x: new Date(r.timestamp), y: val };
+    }).filter(p => p !== null);
+    if (points.length === 0) return null;
+    return {
+      label: node,
+      data: points,
+      borderColor: NODE_COLORS[node].line,
+      backgroundColor: NODE_COLORS[node].bg,
+      borderWidth: 1.5,
+      pointRadius: 0,
+      pointHitRadius: 8,
+      tension: 0.3,
+      fill: false,
+    };
+  }).filter(ds => ds !== null);
+}
+
+function createOrUpdate(canvasId, datasets, yLabel, extraOpts) {
+  const ctx = document.getElementById(canvasId);
+  if (charts[canvasId]) {
+    charts[canvasId].data.datasets = datasets;
+    if (extraOpts && extraOpts.scales && extraOpts.scales.y) {
+      Object.assign(charts[canvasId].options.scales.y, extraOpts.scales.y);
+    }
+    charts[canvasId].update('none');
+    return;
+  }
+  const opts = JSON.parse(JSON.stringify(chartDefaults));
+  if (extraOpts) {
+    if (extraOpts.scales && extraOpts.scales.y) {
+      Object.assign(opts.scales.y, extraOpts.scales.y);
+    }
+    if (extraOpts.plugins) {
+      Object.assign(opts.plugins, extraOpts.plugins);
+    }
+  }
+  charts[canvasId] = new Chart(ctx, {
+    type: 'line',
+    data: { datasets },
+    options: opts,
+  });
+}
+
+function renderNodeCharts() {
+  createOrUpdate('chartCpu', makeDatasets('cpu_percent', NODES), '%', { scales: { y: { max: 100 } } });
+  createOrUpdate('chartMem', makeDatasets('mem_used_mb', NODES), 'MB');
+  createOrUpdate('chartTemp', makeDatasets('temp_c', NODES), 'C');
+  createOrUpdate('chartDisk', makeDatasets('disk_percent', NODES), '%', { scales: { y: { max: 100 } } });
+}
+
+function renderGpuCharts() {
+  const gpuNodes = ['ac-3090'];
+  const gpuFields = [
+    { id: 'chartGpuTemp', field: 'gpu_temp', label: 'C' },
+    { id: 'chartGpuUtil', field: 'gpu_util', label: '%', opts: { scales: { y: { max: 100 } } } },
+    { id: 'chartGpuMem',  field: 'gpu_mem_used_mb', label: 'MB' },
+  ];
+  gpuFields.forEach(gf => {
+    const datasets = makeDatasets(gf.field, gpuNodes);
+    createOrUpdate(gf.id, datasets, gf.label, gf.opts);
+  });
+}
+
+function renderAiHub() {
+  const cardsEl = document.getElementById('aiHubCards');
+  cardsEl.innerHTML = '';
+
+  if (aiHubData.length === 0) {
+    cardsEl.innerHTML = '<div class="message" style="grid-column:1/-1;height:60px;">No AI Hub data for this date</div>';
+    createOrUpdate('chartAiHub', [], 'requests');
+    return;
+  }
+
+  const latestByProvider = {};
+  aiHubData.forEach(r => {
+    latestByProvider[r.provider] = r;
+  });
+
+  const providers = Object.keys(latestByProvider).sort();
+  providers.forEach(prov => {
+    const r = latestByProvider[prov];
+    const used = parseInt(r.today_used) || 0;
+    const limit = parseInt(r.daily_limit) || 0;
+    const pct = limit > 0 && limit < 999999 ? Math.min(100, Math.round(used / limit * 100)) : 0;
+    const healthy = r.healthy === 'true';
+    const color = PROVIDER_COLORS[prov] || '#6c8cff';
+
+    const card = document.createElement('div');
+    card.className = 'provider-card';
+    const limitLabel = limit >= 999999 ? 'unlimited' : limit;
+    card.innerHTML =
+      '<div class="pname">' + prov.replace(/_/g, ' ') +
+      ' <span class="' + (healthy ? 'provider-healthy' : 'provider-unhealthy') + '">' +
+      (healthy ? '&#9679;' : '&#9679;') + '</span></div>' +
+      '<div class="pbar-wrap"><div class="pbar" style="width:' + (limit >= 999999 ? 0 : pct) + '%;background:' + color + '"></div></div>' +
+      '<div class="pstats"><span>Used: ' + used + '</span><span>Limit: ' + limitLabel + '</span></div>';
+    cardsEl.appendChild(card);
+  });
+
+  const timeMap = {};
+  aiHubData.forEach(r => {
+    const ts = r.timestamp;
+    if (!timeMap[ts]) timeMap[ts] = {};
+    timeMap[ts][r.provider] = parseInt(r.today_used) || 0;
+  });
+
+  const times = Object.keys(timeMap).sort();
+  const allProviders = [...new Set(aiHubData.map(r => r.provider))].sort();
+
+  const datasets = allProviders.map(prov => {
+    const points = times.map(ts => {
+      const val = timeMap[ts][prov];
+      if (val === undefined) return null;
+      return { x: new Date(ts), y: val };
+    }).filter(p => p !== null);
+    const color = PROVIDER_COLORS[prov] || '#888';
+    return {
+      label: prov.replace(/_/g, ' '),
+      data: points,
+      borderColor: color,
+      backgroundColor: color + '20',
+      borderWidth: 1.5,
+      pointRadius: 0,
+      pointHitRadius: 8,
+      tension: 0.3,
+      fill: false,
+    };
+  }).filter(ds => ds.data.length > 0);
+
+  createOrUpdate('chartAiHub', datasets, 'requests');
+}
+
+setToday();
+</script>
+</body>
+</html>

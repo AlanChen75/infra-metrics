@@ -1,0 +1,76 @@
+name: Backup Metrics Collection
+
+on:
+  schedule:
+    # 每天 UTC 22:00 (台灣 06:00) — ac-mac 推完 6 小時後的備案
+    - cron: '0 22 * * *'
+  workflow_dispatch:  # 手動觸發
+
+jobs:
+  collect-metrics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Add all node host keys
+          for host in 100.108.119.78 100.116.154.40 100.71.216.27 100.118.162.26; do
+            ssh-keyscan -H "$host" >> ~/.ssh/known_hosts 2>/dev/null
+          done
+
+      - name: Collect from all nodes
+        run: |
+          YESTERDAY=$(date -d "yesterday" +%Y-%m-%d)
+          TODAY=$(date +%Y-%m-%d)
+
+          declare -A NODE_MAP
+          NODE_MAP[ac-3090]="ac3090@100.108.119.78"
+          NODE_MAP[ac-mac]="ac-mac@100.116.154.40"
+          NODE_MAP[ac-rpi5]="ac-rpi5@100.71.216.27"
+          NODE_MAP[acmacmini2]="acmacmini2@100.118.162.26"
+
+          for NODE in "${!NODE_MAP[@]}"; do
+            SSH_TARGET="${NODE_MAP[$NODE]}"
+            mkdir -p "data/${NODE}"
+
+            for DATE in "${YESTERDAY}" "${TODAY}"; do
+              SRC="/var/lib/infra-metrics/${DATE}.csv"
+              echo "Pulling ${NODE}:${SRC}..."
+              scp -o ConnectTimeout=15 -o BatchMode=yes \
+                "${SSH_TARGET}:${SRC}" "data/${NODE}/${DATE}.csv" 2>/dev/null || \
+                echo "WARN: Could not pull ${NODE}:${SRC}"
+            done
+          done
+
+          # AI Hub data from ac-mac
+          mkdir -p data/ai-hub
+          for DATE in "${YESTERDAY}" "${TODAY}"; do
+            scp -o ConnectTimeout=15 -o BatchMode=yes \
+              "ac-mac@100.116.154.40:/var/lib/infra-metrics/ai-hub/${DATE}.csv" \
+              "data/ai-hub/${DATE}.csv" 2>/dev/null || \
+              echo "WARN: Could not pull ai-hub ${DATE}"
+          done
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "No new data to commit"
+          else
+            git commit -m "data(backup): metrics $(date +%Y-%m-%d)"
+            git push
+          fi
