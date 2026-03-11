@@ -1,0 +1,4 @@
+timestamp,cpu_percent,mem_used_mb,mem_total_mb,temp_c,disk_percent,gpu_temp,gpu_util,gpu_mem_used_mb,gpu_mem_total_mb
+2026-03-12T00:00:01,78.3,4386,7818,61.0,4,0,0,0,0
+2026-03-12T00:05:01,46.2,4370,7818,47.0,4,0,0,0,0
+2026-03-12T00:10:01,20,4358,7818,50.0,4,0,0,0,0
